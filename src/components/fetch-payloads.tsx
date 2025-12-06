@@ -210,7 +210,7 @@ export function FetchPayloads({ onSelectPayload }: FetchPayloadsProps) {
                                                     variant="default"
                                                     size="sm"
                                                     className="self-end"
-                                                    disabled={isInUse}
+                                                    disabled={!!isInUse}
                                                     onClick={async () => {
                                                         const downloadDirPath = await downloadDir();
                                                         const payloadsDir = await join(downloadDirPath, "payloads");
