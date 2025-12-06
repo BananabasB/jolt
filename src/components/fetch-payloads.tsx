@@ -14,7 +14,14 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "./ui/dialog";
-import { Item, ItemContent, ItemTitle, ItemDescription, ItemActions } from './ui/item';
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "./ui/card";
 import { Badge } from './ui/badge';
 
 const octokit = new Octokit();
@@ -75,6 +82,7 @@ export function FetchPayloads({ onSelectPayload }: FetchPayloadsProps) {
     const [downloading, setDownloading] = useState<number | null>(null);
     const [downloadedFiles, setDownloadedFiles] = useState<Set<string>>(new Set());
     const [storeLoaded, setStoreLoaded] = useState(false);
+    const [selectedPayload, setSelectedPayload] = useState<string | null>(null);
 
     // Load downloaded files from store on mount
     useEffect(() => {
@@ -135,7 +143,7 @@ export function FetchPayloads({ onSelectPayload }: FetchPayloadsProps) {
             setLoading(true);
             async function fetchReleases() {
                 const data = await getReleases({
-                    owner: 'CTCaer', // change these
+                    owner: 'CTCaer',
                     repo: 'hekate',
                 });
                 if (data) {
@@ -159,80 +167,98 @@ export function FetchPayloads({ onSelectPayload }: FetchPayloadsProps) {
                 <DialogHeader>
                     <DialogTitle>fetch payloads</DialogTitle>
                 </DialogHeader>
-                  <div className="space-y-4">
-                     {loading || !storeLoaded ? (
-                         <div className="text-center py-8">Loading releases...</div>
-                     ) : releases.length === 0 ? (
-                         <div className="text-center py-8 text-muted-foreground">
-                             No releases found
-                         </div>
-                     ) : (
-                         releases.map((release) => (
-                             <Item key={release.id} variant="outline">
-                                 <ItemContent>
-                                     <div className="flex items-center gap-2 mb-1">
-                                         <ItemTitle className="text-base flex items-center gap-2">
-                                             {release.name || release.tag_name}
-                                             {release.assets.length > 0 && downloadedFiles.has(release.assets[0].name) && (
-                                                 <Check className="w-4 h-4 text-green-600" />
-                                             )}
-                                         </ItemTitle>
-                                         <Badge variant="secondary">{release.tag_name}</Badge>
-                                     </div>
-                                     <ItemDescription>
-                                         {new Date(release.published_at).toLocaleDateString()}
-                                     </ItemDescription>
-                                 </ItemContent>
-                                 {release.assets.length > 0 && (
-                                     <ItemActions>
-                                         {downloadedFiles.has(release.assets[0].name) ? (
-                                             <Button
-                                                 variant="default"
-                                                 size="sm"
-                                                 onClick={async () => {
-                                                     const downloadDirPath = await downloadDir();
-                                                     const payloadsDir = await join(downloadDirPath, "payloads");
-                                                     const filePath = await join(payloadsDir, release.assets[0].name);
-                                                     onSelectPayload?.(filePath);
-                                                     setOpen(false);
-                                                     alert(`Selected payload: ${release.assets[0].name}`);
-                                                 }}
-                                             >
-                                                 use
-                                             </Button>
-                                         ) : (
-                                             <Button
-                                                 variant="outline"
-                                                 size="sm"
-                                                 disabled={downloading === release.id}
-                                                 onClick={async () => {
-                                                     if (!release.assets[0]) return;
+                <div className="space-y-4">
+                    {loading || !storeLoaded ? (
+                        <div className="text-center py-8">loading releases...</div>
+                    ) : releases.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                            no releases found
+                        </div>
+                    ) : (
+                        releases.map((release, index) => {
+                            const isLatest = index === 0;
+                            const assetName = release.assets[0]?.name;
+                            const isDownloaded = assetName && downloadedFiles.has(assetName);
+                            const isInUse = assetName && selectedPayload === assetName;
 
-                                                     setDownloading(release.id);
-                                                     try {
-                                                         const filePath = await downloadPayload(
-                                                             release.assets[0].browser_download_url,
-                                                             release.assets[0].name
-                                                         );
-                                                         // Update downloaded files state
-                                                         setDownloadedFiles(prev => new Set(prev).add(release.assets[0].name));
-                                                         alert(`Downloaded to: ${filePath}`);
-                                                     } catch (error) {
-                                                         alert(`Download failed: ${error}`);
-                                                     } finally {
-                                                         setDownloading(null);
-                                                     }
-                                                 }}
-                                             >
-                                                 <DownloadCloud className="w-4 h-4 mr-2" />
-                                                 {downloading === release.id ? "downloading..." : "download"}
-                                             </Button>
-                                         )}
-                                     </ItemActions>
-                                 )}
-                             </Item>
-                         ))
-                     )}
+                            return (
+                                <Card key={release.id}>
+                                    <CardHeader>
+                                        <div className="flex flex-row justify-between">
+                                            <div className="flex gap-2 flex-col">
+                                            <CardTitle className="text-base inline items-center gap-2">
+                                                {release.name || release.tag_name}
+                                            </CardTitle>
+                                            <CardDescription>
+                                            {new Date(release.published_at).toLocaleDateString()}
+                                        </CardDescription>
+                                            </div>
+                                            <div className="flex flex-col items-end gap-2">
+                                            {isLatest && (
+                                                    <Badge variant="default" className="bg-green-500">recommended</Badge>
+                                                )}
+                                                <Badge variant="secondary">{release.tag_name}</Badge>
+                                                
+                                            </div>
+                                            
+                                        </div>
+                                        
+                                    </CardHeader>
+                                    {release.assets.length > 0 && (
+                                        <CardFooter className="flex justify-end gap-2">
+                                            {isDownloaded ? (
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    className="self-end"
+                                                    disabled={isInUse}
+                                                    onClick={async () => {
+                                                        const downloadDirPath = await downloadDir();
+                                                        const payloadsDir = await join(downloadDirPath, "payloads");
+                                                        const filePath = await join(payloadsDir, assetName);
+                                                        setSelectedPayload(assetName);
+                                                        onSelectPayload?.(filePath);
+                                                        setOpen(false);
+                                                        alert(`selected payload: ${assetName}`);
+                                                    }}
+                                                >
+                                                    {isInUse ? <>
+                                                        <Check /> in use
+                                                    </> : 'use'}
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    disabled={downloading === release.id}
+                                                    onClick={async () => {
+                                                        if (!release.assets[0]) return;
+
+                                                        setDownloading(release.id);
+                                                        try {
+                                                            const filePath = await downloadPayload(
+                                                                release.assets[0].browser_download_url,
+                                                                release.assets[0].name
+                                                            );
+                                                            setDownloadedFiles(prev => new Set(prev).add(release.assets[0].name));
+                                                            alert(`downloaded to: ${filePath}`);
+                                                        } catch (error) {
+                                                            alert(`download failed: ${error}`);
+                                                        } finally {
+                                                            setDownloading(null);
+                                                        }
+                                                    }}
+                                                >
+                                                    <DownloadCloud className="w-4 h-4 mr-2" />
+                                                    {downloading === release.id ? "downloading..." : "download"}
+                                                </Button>
+                                            )}
+                                        </CardFooter>
+                                    )}
+                                </Card>
+                            );
+                        })
+                    )}
                 </div>
             </DialogContent>
         </Dialog>

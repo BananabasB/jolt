@@ -126,11 +126,11 @@ export default function Home() {
                 )}
               </Button>
               <Button
-                onClick={listUsbDevices}
+                onClick={() => setShowDevices(!showDevices)}
                 size="sm"
                 variant="outline"
               >
-                list all USB
+                {showDevices ? "hide" : "show"} all USB
               </Button>
             </div>
           </div>
@@ -166,13 +166,6 @@ export default function Home() {
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">USB devices ({usbDevices.length})</h2>
-              <Button
-                onClick={() => setShowDevices(false)}
-                size="sm"
-                variant="outline"
-              >
-                hide
-              </Button>
             </div>
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
