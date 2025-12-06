@@ -9,6 +9,7 @@ import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch } from "lucide-react";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { FetchPayloads } from "@/components/fetch-payloads";
+
 interface DeviceInfo {
   vendor_id: number;
   product_id: number;
@@ -27,12 +28,12 @@ export default function Home() {
   const [rcmStatus, setRcmStatus] = useState<RcmStatus | null>(null);
   const [isManuallyScanning, setIsManuallyScanning] = useState(false);
   const [selectedPayload, setSelectedPayload] = useState<string>("");
-  const [usbDevices] = useState<DeviceInfo[]>([]);
+  const [usbDevices, setUsbDevices] = useState<DeviceInfo[]>([]);
   const [showDevices, setShowDevices] = useState(false);
   const [isInjecting, setIsInjecting] = useState(false);
   const [version, setVersion] = useState<string>("");
+
   useEffect(() => {
-    // this function will only run after the component mounts on the client
     const fetchVersion = async () => {
       try {
         const appVersion: string = await invoke("get_app_version");
@@ -44,7 +45,6 @@ export default function Home() {
     };
 
     fetchVersion();
-    // the empty array [] ensures this runs only once after initial render
   }, []);
 
   const scanForDevice = async () => {
@@ -56,9 +56,20 @@ export default function Home() {
     }
   };
 
+  const listUsbDevices = async () => {
+    try {
+      const devices: DeviceInfo[] = await invoke("list_usb_devices");
+      setUsbDevices(devices);
+    } catch (error) {
+      console.error("failed to list usb devices:", error);
+      setUsbDevices([]);
+    }
+  };
+
   const manualScanForDevice = async () => {
     setIsManuallyScanning(true);
     await scanForDevice();
+    await listUsbDevices();
     setIsManuallyScanning(false);
   };
 
@@ -85,14 +96,18 @@ export default function Home() {
 
   useEffect(() => {
     scanForDevice();
-    // Auto-scan every 2 seconds, but not during injection
+    listUsbDevices();
+    
     const interval = setInterval(() => {
       if (!isInjecting) {
         scanForDevice();
+        if (showDevices) {
+          listUsbDevices();
+        }
       }
     }, 2000);
     return () => clearInterval(interval);
-  }, [isInjecting]);
+  }, [isInjecting, showDevices]);
 
   return (
     <main className="flex min-h-screen bg-background items-center justify-center relative p-4">
@@ -174,17 +189,21 @@ export default function Home() {
             </div>
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
-              {usbDevices.map((device, index) => (
-                <div key={index} className="border rounded p-2 text-sm">
-                  <div className="font-mono">
-                    vendor: 0x{device.vendor_id.toString(16).toUpperCase().padStart(4, '0')} |
-                    product: 0x{device.product_id.toString(16).toUpperCase().padStart(4, '0')}
+              {usbDevices.length === 0 ? (
+                <div className="text-sm text-muted-foreground">no USB devices found</div>
+              ) : (
+                usbDevices.map((device, index) => (
+                  <div key={index} className="border rounded p-2 text-sm">
+                    <div className="font-mono">
+                      vendor: 0x{device.vendor_id.toString(16).toUpperCase().padStart(4, '0')} |
+                      product: 0x{device.product_id.toString(16).toUpperCase().padStart(4, '0')}
+                    </div>
+                    {device.manufacturer && <div>Manufacturer: {device.manufacturer}</div>}
+                    {device.product && <div>Product: {device.product}</div>}
+                    {device.serial_number && <div>Serial: {device.serial_number}</div>}
                   </div>
-                  {device.manufacturer && <div>Manufacturer: {device.manufacturer}</div>}
-                  {device.product && <div>Product: {device.product}</div>}
-                  {device.serial_number && <div>Serial: {device.serial_number}</div>}
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}
