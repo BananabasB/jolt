@@ -9,7 +9,6 @@ import { ModeToggle } from "@/components/ui/mode-toggle";
 import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch } from "lucide-react";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { FetchPayloads } from "@/components/fetch-payloads";
-
 interface DeviceInfo {
   vendor_id: number;
   product_id: number;
@@ -31,6 +30,22 @@ export default function Home() {
   const [usbDevices, setUsbDevices] = useState<DeviceInfo[]>([]);
   const [showDevices, setShowDevices] = useState(false);
   const [isInjecting, setIsInjecting] = useState(false);
+  const [version, setVersion] = useState<string>("");
+  useEffect(() => {
+    // this function will only run after the component mounts on the client
+    const fetchVersion = async () => {
+      try {
+        const appVersion: string = await invoke("get_app_version");
+        setVersion(appVersion);
+      } catch (error) {
+        console.error("failed to fetch app version:", error);
+        setVersion("error");
+      }
+    };
+
+    fetchVersion();
+    // the empty array [] ensures this runs only once after initial render
+  }, []);
 
   const scanForDevice = async () => {
     try {
@@ -239,6 +254,7 @@ export default function Home() {
           </div>
         </div>
       </div>
+      <div className="absolute text-muted-foreground text-sm bottom-3 right-3">v{version}</div>
     </main>
   );
 }

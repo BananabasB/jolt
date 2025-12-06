@@ -527,6 +527,15 @@ async fn get_rcm_status() -> Result<RcmStatus, String> {
 }
 
 #[tauri::command]
+fn get_app_version() -> String {
+    // CARGO_PKG_VERSION is an environment variable automatically set by Cargo
+    // to the version specified in your Cargo.toml file.
+    option_env!("CARGO_PKG_VERSION")
+        .unwrap_or("unknown")
+        .to_string()
+}
+
+#[tauri::command]
 async fn inject_payload(payload_path: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     println!("Starting Fusée Gelée exploit (Rust implementation based on Python original)...");
     println!("Payload path: {}", payload_path);
@@ -1080,7 +1089,9 @@ pub fn run() {
             get_rcm_status,
             list_usb_devices,
             inject_payload,
-            download_payload
+            download_payload,
+            // >> new command added here! <<
+            get_app_version 
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
