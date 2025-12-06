@@ -27,7 +27,7 @@ export default function Home() {
   const [rcmStatus, setRcmStatus] = useState<RcmStatus | null>(null);
   const [isManuallyScanning, setIsManuallyScanning] = useState(false);
   const [selectedPayload, setSelectedPayload] = useState<string>("");
-  const [usbDevices, setUsbDevices] = useState<DeviceInfo[]>([]);
+  const [usbDevices] = useState<DeviceInfo[]>([]);
   const [showDevices, setShowDevices] = useState(false);
   const [isInjecting, setIsInjecting] = useState(false);
   const [version, setVersion] = useState<string>("");

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "jolt",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "identifier": "dev.bananabas.jolt",
   "build": {
     "beforeDevCommand": "bun run dev",
