@@ -5,6 +5,13 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "opener:default"
-  ]
+    "opener:default",
+    "core:app:default",
+    "core:window:default",
+    "core:webview:default",
+    "dialog:default",
+    "store:allow-set",
+    "store:default"
+  ],
+  "platforms": ["linux", "macOS", "windows"]
 }

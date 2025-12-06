@@ -21,7 +21,15 @@
       "csp": null
     }
   },
+  "plugins": {
+    "updater": {
+      "active": false
+    }
+  },
   "bundle": {
+    "resources": [
+      "icons/Assets.car"
+    ],
     "active": true,
     "targets": "all",
     "icon": [
