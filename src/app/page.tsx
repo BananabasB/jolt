@@ -83,16 +83,6 @@ export default function Home() {
     }
   };
 
-  const listUsbDevices = async () => {
-    try {
-      const devices: DeviceInfo[] = await invoke("list_usb_devices");
-      setUsbDevices(devices);
-      setShowDevices(true);
-    } catch (error) {
-      alert(`Error listing USB devices: ${error}`);
-    }
-  };
-
   useEffect(() => {
     scanForDevice();
     // Auto-scan every 2 seconds, but not during injection
