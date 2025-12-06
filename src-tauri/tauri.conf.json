@@ -27,8 +27,14 @@
     }
   },
   "bundle": {
+    "macOS": {
+      "files": {
+        "Resources/Assets.car": "icons/Assets.car"
+      }
+    },
     "resources": [
-      "icons/Assets.car"
+      "icons/Assets.car",
+      "../assets/intermezzo.bin"
     ],
     "active": true,
     "targets": "all",

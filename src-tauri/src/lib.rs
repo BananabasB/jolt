@@ -1,7 +1,8 @@
+use reqwest::blocking;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use reqwest::blocking;
 use tokio;
+use tauri::Manager;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
@@ -45,7 +46,11 @@ impl Backend {
         // Currently no warnings for our implementation
     }
 
-    fn trigger_vulnerability(&self, device: &rusb::DeviceHandle<rusb::GlobalContext>, length: usize) -> Result<(), rusb::Error> {
+    fn trigger_vulnerability(
+        &self,
+        device: &rusb::DeviceHandle<rusb::GlobalContext>,
+        length: usize,
+    ) -> Result<(), rusb::Error> {
         // Triggering the vulnerability is simplest on macOS; we simply issue the control request as-is.
         // Note: This will timeout when successful because the device crashes!
         let mut buffer = vec![0u8; length];
@@ -55,7 +60,7 @@ impl Backend {
             0,
             0,
             &mut buffer,
-            std::time::Duration::from_millis(1000)
+            std::time::Duration::from_millis(1000),
         ) {
             Ok(_) => Ok(()), // This shouldn't normally happen with the vulnerability
             Err(rusb::Error::Timeout) => Ok(()), // Timeout = success! Device crashed
@@ -63,22 +68,35 @@ impl Backend {
         }
     }
 
-    fn read(&self, device: &rusb::DeviceHandle<rusb::GlobalContext>, length: usize) -> Result<Vec<u8>, rusb::Error> {
+    fn read(
+        &self,
+        device: &rusb::DeviceHandle<rusb::GlobalContext>,
+        length: usize,
+    ) -> Result<Vec<u8>, rusb::Error> {
         // Reads data from the RCM protocol endpoint.
         let mut buffer = vec![0u8; length];
-        let bytes_read = device.read_bulk(0x81, &mut buffer, std::time::Duration::from_millis(1000))?;
+        let bytes_read =
+            device.read_bulk(0x81, &mut buffer, std::time::Duration::from_millis(1000))?;
         buffer.truncate(bytes_read);
         Ok(buffer)
     }
 
-    fn write_single_buffer(&self, device: &rusb::DeviceHandle<rusb::GlobalContext>, data: &[u8]) -> Result<usize, rusb::Error> {
+    fn write_single_buffer(
+        &self,
+        device: &rusb::DeviceHandle<rusb::GlobalContext>,
+        data: &[u8],
+    ) -> Result<usize, rusb::Error> {
         // Writes a single RCM buffer, which should be 0x1000 long.
         // The last packet may be shorter, and should trigger a ZLP (e.g. not divisible by 512).
         // If it's not, send a ZLP.
         device.write_bulk(0x01, data, std::time::Duration::from_millis(1000))
     }
 
-    fn find_device(&self, vid: Option<u16>, pid: Option<u16>) -> Result<rusb::Device<rusb::GlobalContext>, rusb::Error> {
+    fn find_device(
+        &self,
+        vid: Option<u16>,
+        pid: Option<u16>,
+    ) -> Result<rusb::Device<rusb::GlobalContext>, rusb::Error> {
         // Set and return the device to be used
         let vid = vid.unwrap_or(RCM_VID);
         let pid = pid.unwrap_or(RCM_PID);
@@ -98,7 +116,10 @@ impl Backend {
         Ok(device)
     }
 
-    fn create_appropriate_backend(_system_override: Option<&str>, skip_checks: bool) -> Result<Self, String> {
+    fn create_appropriate_backend(
+        _system_override: Option<&str>,
+        skip_checks: bool,
+    ) -> Result<Self, String> {
         // Creates a backend object appropriate for the current OS.
         // For now, we support all platforms the same way
         Ok(Self::new(skip_checks))
@@ -122,7 +143,13 @@ impl RCMHax {
     const COPY_BUFFER_ADDRESSES: [u32; 2] = [0x40005000, 0x40009000]; // The addresses of the DMA buffers we can trigger a copy _from_.
     const STACK_END: u32 = 0x40010000; // The address just after the end of the device's stack.
 
-    fn new(wait_for_device: bool, os_override: Option<&str>, vid: Option<u16>, pid: Option<u16>, override_checks: bool) -> Result<Self, String> {
+    fn new(
+        wait_for_device: bool,
+        os_override: Option<&str>,
+        vid: Option<u16>,
+        pid: Option<u16>,
+        override_checks: bool,
+    ) -> Result<Self, String> {
         // Set up our RCM hack connection.
 
         // The first write into the bootROM touches the lowbuffer.
@@ -132,8 +159,10 @@ impl RCMHax {
         let _total_written = 0;
 
         // Create a vulnerability backend for the given device.
-        let backend = Backend::create_appropriate_backend(os_override, override_checks)
-            .map_err(|_| "No backend to trigger the vulnerability-- it's likely we don't support your OS!")?;
+        let backend =
+            Backend::create_appropriate_backend(os_override, override_checks).map_err(|_| {
+                "No backend to trigger the vulnerability-- it's likely we don't support your OS!"
+            })?;
 
         // Grab a connection to the USB device itself.
         let device = Self::_find_device(&backend, vid, pid)?;
@@ -162,17 +191,24 @@ impl RCMHax {
 
         // For RCM devices, we need to claim the interface to communicate
         // Find the interface and claim it
-        let _device_descriptor = device_handle.device().device_descriptor()
+        let _device_descriptor = device_handle
+            .device()
+            .device_descriptor()
             .map_err(|e| format!("Failed to get device descriptor: {}", e))?;
-        let config_descriptor = device_handle.device().active_config_descriptor()
+        let config_descriptor = device_handle
+            .device()
+            .active_config_descriptor()
             .map_err(|e| format!("Failed to get config descriptor: {}", e))?;
 
         // Claim the first interface (typically interface 0 for RCM devices)
         if let Some(interface) = config_descriptor.interfaces().next() {
             if let Some(interface_desc) = interface.descriptors().next() {
                 let interface_number = interface_desc.interface_number();
-                device_handle.claim_interface(interface_number)
-                    .map_err(|e| format!("Failed to claim interface {}: {}", interface_number, e))?;
+                device_handle
+                    .claim_interface(interface_number)
+                    .map_err(|e| {
+                        format!("Failed to claim interface {}: {}", interface_number, e)
+                    })?;
                 println!("Claimed interface {}", interface_number);
             }
         }
@@ -188,7 +224,11 @@ impl RCMHax {
         })
     }
 
-    fn _find_device(backend: &Backend, vid: Option<u16>, pid: Option<u16>) -> Result<Option<rusb::DeviceHandle<rusb::GlobalContext>>, String> {
+    fn _find_device(
+        backend: &Backend,
+        vid: Option<u16>,
+        pid: Option<u16>,
+    ) -> Result<Option<rusb::DeviceHandle<rusb::GlobalContext>>, String> {
         // Attempts to get a connection to the RCM device with the given VID and PID.
         // Apply our default VID and PID if neither are provided...
         let vid = vid.unwrap_or(Self::DEFAULT_VID);
@@ -196,11 +236,9 @@ impl RCMHax {
 
         // ... and use them to find a USB device.
         match backend.find_device(Some(vid), Some(pid)) {
-            Ok(device) => {
-                match device.open() {
-                    Ok(handle) => Ok(Some(handle)),
-                    Err(_) => Ok(None),
-                }
+            Ok(device) => match device.open() {
+                Ok(handle) => Ok(Some(handle)),
+                Err(_) => Ok(None),
             },
             Err(_) => Ok(None),
         }
@@ -262,7 +300,8 @@ impl RCMHax {
     fn trigger_controlled_memcpy(&self, length: Option<usize>) -> Result<(), rusb::Error> {
         // Triggers the RCM vulnerability, causing it to make a significantly-oversized memcpy.
         // Determine how much we'd need to transmit to smash the full stack.
-        let length = length.unwrap_or((Self::STACK_END - self.get_current_buffer_address()) as usize);
+        let length =
+            length.unwrap_or((Self::STACK_END - self.get_current_buffer_address()) as usize);
         self.backend.trigger_vulnerability(&self.device, length)
     }
 }
@@ -270,15 +309,14 @@ impl RCMHax {
 /// Payload construction utilities
 fn build_payload(target_payload: &[u8], intermezzo_path: &Path) -> Result<Vec<u8>, String> {
     // Read our intermezzo relocator...
-    let intermezzo_path = intermezzo_path.to_str()
-        .ok_or("Invalid intermezzo path")?;
+    let intermezzo_path = intermezzo_path.to_str().ok_or("Invalid intermezzo path")?;
 
     if !Path::new(intermezzo_path).exists() {
         return Err("Could not find the intermezzo interposer. Did you build it?".to_string());
     }
 
-    let intermezzo = std::fs::read(intermezzo_path)
-        .map_err(|e| format!("Failed to read intermezzo: {}", e))?;
+    let intermezzo =
+        std::fs::read(intermezzo_path).map_err(|e| format!("Failed to read intermezzo: {}", e))?;
 
     let intermezzo_size = intermezzo.len();
 
@@ -332,14 +370,20 @@ fn build_payload(target_payload: &[u8], intermezzo_path: &Path) -> Result<Vec<u8
     // If it won't, error out.
     if payload.len() > length as usize {
         let size_over = payload.len() - length as usize;
-        return Err(format!("ERROR: Payload is too large to be submitted via RCM. ({} bytes larger than max).", size_over));
+        return Err(format!(
+            "ERROR: Payload is too large to be submitted via RCM. ({} bytes larger than max).",
+            size_over
+        ));
     }
 
     Ok(payload)
 }
 
 /// Main exploit function - equivalent to try_push in Python
-fn execute_fusee_gelee_exploit(target_payload_path: &str, intermezzo_path: &str) -> Result<String, String> {
+fn execute_fusee_gelee_exploit(
+    target_payload_path: &str,
+    intermezzo_path: &str,
+) -> Result<String, String> {
     // Read our arguments.
 
     // Find our intermezzo relocator...
@@ -356,7 +400,10 @@ fn execute_fusee_gelee_exploit(target_payload_path: &str, intermezzo_path: &str)
     match switch.read_device_id() {
         Ok(device_id) => println!("Found a Tegra with Device ID: {:?}", device_id),
         Err(e) => {
-            println!("Warning: Could not read device ID (this may be normal): {}", e);
+            println!(
+                "Warning: Could not read device ID (this may be normal): {}",
+                e
+            );
             println!("Continuing with exploit anyway...");
         }
     }
@@ -371,12 +418,14 @@ fn execute_fusee_gelee_exploit(target_payload_path: &str, intermezzo_path: &str)
     // Send the constructed payload, which contains the command, the stack smashing
     // values, the Intermezzo relocation stub, and the final payload.
     println!("Uploading payload...");
-    switch.write(&payload)
+    switch
+        .write(&payload)
         .map_err(|e| format!("Failed to upload payload: {}", e))?;
 
     // The RCM backend alternates between two different DMA buffers. Ensure we're
     // about to DMA into the higher one, so we have less to copy during our attack.
-    switch.switch_to_highbuf()
+    switch
+        .switch_to_highbuf()
         .map_err(|e| format!("Failed to switch to high buffer: {}", e))?;
 
     // Smash the device's stack, triggering the vulnerability.
@@ -386,13 +435,13 @@ fn execute_fusee_gelee_exploit(target_payload_path: &str, intermezzo_path: &str)
             println!("✅ Exploit completed successfully!");
             println!("🎉 The payload has been injected and the device has been rebooted.");
             Ok("🎯 Payload injection successful! Check your Switch - it should be running the payload now!".to_string())
-        },
+        }
         Err(rusb::Error::Timeout) => {
             // Timeout during trigger = SUCCESS! The device crashed as expected
             println!("✅ Exploit completed successfully (device timed out as expected)!");
             println!("🎉 The payload has been injected and the device has crashed/rebooted.");
             Ok("🎯 Payload injection successful! The Switch crashed as expected - check if your payload is running!".to_string())
-        },
+        }
         Err(e) => {
             // Other errors are actual failures
             Err(format!("Exploit failed: {}", e))
@@ -438,16 +487,17 @@ async fn detect_rcm_device() -> Result<RcmStatus, String> {
             for device in devices.iter().take(20) {
                 match device.device_descriptor() {
                     Ok(desc) => {
-                        if desc.vendor_id() == NINTENDO_VENDOR_ID && desc.product_id() == SWITCH_RCM_PRODUCT_ID {
+                        if desc.vendor_id() == NINTENDO_VENDOR_ID
+                            && desc.product_id() == SWITCH_RCM_PRODUCT_ID
+                        {
                             // Found Switch in RCM mode
-                            let device_info = device.open().ok()
-                                .map(|handle| DeviceInfo {
-                                    vendor_id: desc.vendor_id(),
-                                    product_id: desc.product_id(),
-                                    manufacturer: handle.read_manufacturer_string_ascii(&desc).ok(),
-                                    product: handle.read_product_string_ascii(&desc).ok(),
-                                    serial_number: handle.read_serial_number_string_ascii(&desc).ok(),
-                                });
+                            let device_info = device.open().ok().map(|handle| DeviceInfo {
+                                vendor_id: desc.vendor_id(),
+                                product_id: desc.product_id(),
+                                manufacturer: handle.read_manufacturer_string_ascii(&desc).ok(),
+                                product: handle.read_product_string_ascii(&desc).ok(),
+                                serial_number: handle.read_serial_number_string_ascii(&desc).ok(),
+                            });
 
                             return Ok(RcmStatus {
                                 device_connected: true,
@@ -477,7 +527,7 @@ async fn get_rcm_status() -> Result<RcmStatus, String> {
 }
 
 #[tauri::command]
-async fn inject_payload(payload_path: String) -> Result<String, String> {
+async fn inject_payload(payload_path: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     println!("Starting Fusée Gelée exploit (Rust implementation based on Python original)...");
     println!("Payload path: {}", payload_path);
 
@@ -486,14 +536,21 @@ async fn inject_payload(payload_path: String) -> Result<String, String> {
         return Err(format!("Payload file does not exist: {}", payload_path));
     }
 
-    // For now, expect intermezzo.bin in the assets directory (relative to project root)
-    let intermezzo_path = "../assets/intermezzo.bin";
-    if !std::path::Path::new(intermezzo_path).exists() {
-        return Err(format!("Intermezzo binary not found at: {}. Please ensure you have built the intermezzo relocator.", intermezzo_path));
+    // Use Tauri v2 API to resolve resource path
+    let resource_path = app_handle
+        .path()
+        .resolve("assets/intermezzo.bin", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| format!("Could not resolve intermezzo.bin path: {}", e))?;
+    
+    if !resource_path.exists() {
+        return Err(format!("Intermezzo binary not found at: {:?}. Please ensure you have built the intermezzo relocator.", resource_path));
     }
 
+    let intermezzo_path_str = resource_path.to_str()
+        .ok_or("Invalid intermezzo path")?;
+
     // Execute the exploit using our faithful Rust implementation
-    match execute_fusee_gelee_exploit(&payload_path, intermezzo_path) {
+    match execute_fusee_gelee_exploit(&payload_path, intermezzo_path_str) {
         Ok(msg) => Ok(msg),
         Err(e) => {
             println!("Exploit failed: {}", e);
@@ -504,15 +561,19 @@ async fn inject_payload(payload_path: String) -> Result<String, String> {
 
 fn diagnose_device_state(
     handle: &rusb::DeviceHandle<rusb::GlobalContext>,
-    bulk_out_ep: u8
+    bulk_out_ep: u8,
 ) -> Result<(), String> {
     println!("Running device diagnostics...");
 
     // Test 1: Basic control transfer responsiveness
     let mut buffer = [0u8; 2];
     match handle.read_control(
-        0x80, 0x00, 0x0000, 0x00, &mut buffer,
-        std::time::Duration::from_millis(100)
+        0x80,
+        0x00,
+        0x0000,
+        0x00,
+        &mut buffer,
+        std::time::Duration::from_millis(100),
     ) {
         Ok(len) => println!("  ✓ Control transfer test: {} bytes received", len),
         Err(e) => return Err(format!("Control transfer test failed: {}", e)),
@@ -520,14 +581,21 @@ fn diagnose_device_state(
 
     // Test 2: Try a minimal bulk transfer
     let test_data = [0u8; 0x40]; // 64 bytes
-    match handle.write_bulk(bulk_out_ep, &test_data, std::time::Duration::from_millis(50)) {
+    match handle.write_bulk(
+        bulk_out_ep,
+        &test_data,
+        std::time::Duration::from_millis(50),
+    ) {
         Ok(written) => {
             println!("  ✓ Minimal bulk transfer test: {} bytes sent", written);
             Ok(())
-        },
+        }
         Err(e) => {
             if e.to_string().contains("timeout") {
-                Err("Device not accepting bulk transfers - may not be in proper RCM state".to_string())
+                Err(
+                    "Device not accepting bulk transfers - may not be in proper RCM state"
+                        .to_string(),
+                )
             } else {
                 Err(format!("Bulk transfer test failed: {}", e))
             }
@@ -539,7 +607,7 @@ fn perform_fusee_gelee_exploit(
     handle: &rusb::DeviceHandle<rusb::GlobalContext>,
     interface_number: u8,
     bulk_out_ep: u8,
-    payload_data: &[u8]
+    payload_data: &[u8],
 ) -> Result<String, String> {
     println!("Starting Fusée Gelée exploit (based on crystalRCM and rajkosto implementations)...");
 
@@ -592,8 +660,7 @@ fn perform_fusee_gelee_exploit(
 #[tauri::command]
 async fn download_payload(url: String, filename: String) -> Result<String, String> {
     // Get the download directory (platform-specific app data directory)
-    let download_dir = dirs::download_dir()
-        .ok_or("Could not determine download directory")?;
+    let download_dir = dirs::download_dir().ok_or("Could not determine download directory")?;
 
     // Create payloads subdirectory
     let payloads_dir = download_dir.join("payloads");
@@ -606,24 +673,28 @@ async fn download_payload(url: String, filename: String) -> Result<String, Strin
 
     let result = tokio::task::spawn_blocking(move || {
         // Download the file using blocking client
-        let response = blocking::get(&url_clone)
-            .map_err(|e| format!("Failed to download file: {}", e))?;
+        let response =
+            blocking::get(&url_clone).map_err(|e| format!("Failed to download file: {}", e))?;
 
         if !response.status().is_success() {
-            return Err(format!("Download failed with status: {}", response.status()));
+            return Err(format!(
+                "Download failed with status: {}",
+                response.status()
+            ));
         }
 
-        let content = response.bytes()
+        let content = response
+            .bytes()
             .map_err(|e| format!("Failed to read response: {}", e))?;
 
         // Save to file
         let payloads_dir = download_dir.join("payloads");
         let file_path = payloads_dir.join(&filename_clone);
-        std::fs::write(&file_path, content)
-            .map_err(|e| format!("Failed to save file: {}", e))?;
+        std::fs::write(&file_path, content).map_err(|e| format!("Failed to save file: {}", e))?;
 
         Ok(file_path.to_string_lossy().to_string())
-    }).await;
+    })
+    .await;
 
     match result {
         Ok(inner_result) => inner_result,
@@ -634,19 +705,23 @@ async fn download_payload(url: String, filename: String) -> Result<String, Strin
 fn try_classic_bulk_interrupt(
     handle: &rusb::DeviceHandle<rusb::GlobalContext>,
     bulk_out_ep: u8,
-    payload_data: &[u8]
+    payload_data: &[u8],
 ) -> Result<String, String> {
     println!("  Attempting classic bulk interrupt method...");
 
     // Send initial bulk data with very short timeout
     let initial_chunk = &payload_data[0..std::cmp::min(0x1000, payload_data.len())];
 
-    match handle.write_bulk(bulk_out_ep, initial_chunk, std::time::Duration::from_millis(50)) {
+    match handle.write_bulk(
+        bulk_out_ep,
+        initial_chunk,
+        std::time::Duration::from_millis(50),
+    ) {
         Ok(_) => {
             // Bulk transfer succeeded - device is accepting data normally
             // This means exploit didn't trigger, try a different approach
             return Err("Device accepted bulk data normally - exploit not triggered".to_string());
-        },
+        }
         Err(e) => {
             if e.to_string().contains("timeout") {
                 println!("  ✓ Bulk transfer timed out as expected - sending overflow control transfer...");
@@ -654,12 +729,12 @@ fn try_classic_bulk_interrupt(
                 // Send the overflow control transfer immediately after timeout
                 let mut overflow_buffer = vec![0u8; 0xFFFF];
                 match handle.read_control(
-                    0x82, // bmRequestType: IN | STANDARD | ENDPOINT
-                    0x00, // bRequest: GET_STATUS
-                    0x0000, // wValue
+                    0x82,               // bmRequestType: IN | STANDARD | ENDPOINT
+                    0x00,               // bRequest: GET_STATUS
+                    0x0000,             // wValue
                     bulk_out_ep as u16, // wIndex: target bulk endpoint
                     &mut overflow_buffer,
-                    std::time::Duration::from_millis(100)
+                    std::time::Duration::from_millis(100),
                 ) {
                     Ok(_) => println!("  ✓ Control transfer succeeded"),
                     Err(e) => println!("  ⚠ Control transfer failed: {}", e),
@@ -667,9 +742,16 @@ fn try_classic_bulk_interrupt(
 
                 // Check if device is still responsive
                 std::thread::sleep(std::time::Duration::from_millis(50));
-                match handle.write_bulk(bulk_out_ep, &payload_data[0..0x100], std::time::Duration::from_millis(50)) {
+                match handle.write_bulk(
+                    bulk_out_ep,
+                    &payload_data[0..0x100],
+                    std::time::Duration::from_millis(50),
+                ) {
                     Ok(_) => Err("Device still responsive - exploit failed".to_string()),
-                    Err(_) => Ok("✓ Classic bulk interrupt exploit succeeded! Device crashed/rebooted.".to_string()),
+                    Err(_) => Ok(
+                        "✓ Classic bulk interrupt exploit succeeded! Device crashed/rebooted."
+                            .to_string(),
+                    ),
                 }
             } else {
                 Err(format!("Unexpected bulk transfer error: {}", e))
@@ -681,7 +763,7 @@ fn try_classic_bulk_interrupt(
 fn try_primed_device_exploit(
     handle: &rusb::DeviceHandle<rusb::GlobalContext>,
     bulk_out_ep: u8,
-    payload_data: &[u8]
+    payload_data: &[u8],
 ) -> Result<String, String> {
     println!("  Attempting primed device method...");
 
@@ -690,12 +772,12 @@ fn try_primed_device_exploit(
 
     for i in 1..=5 {
         match handle.read_control(
-            0x80, // Device-directed
-            0x00, // GET_STATUS
+            0x80,   // Device-directed
+            0x00,   // GET_STATUS
             0x0000, // wValue
-            0x00, // wIndex (device)
+            0x00,   // wIndex (device)
             &mut overflow_buffer,
-            std::time::Duration::from_millis(200)
+            std::time::Duration::from_millis(200),
         ) {
             Ok(_) => println!("  ✓ Prime control transfer {} succeeded", i),
             Err(e) => println!("  ⚠ Prime control transfer {} failed: {}", i, e),
@@ -704,9 +786,16 @@ fn try_primed_device_exploit(
     }
 
     // Now try bulk transfer
-    match handle.write_bulk(bulk_out_ep, &payload_data[0..0x1000], std::time::Duration::from_millis(1000)) {
+    match handle.write_bulk(
+        bulk_out_ep,
+        &payload_data[0..0x1000],
+        std::time::Duration::from_millis(1000),
+    ) {
         Ok(written) => {
-            println!("  ✓ Bulk transfer succeeded ({} bytes) after priming", written);
+            println!(
+                "  ✓ Bulk transfer succeeded ({} bytes) after priming",
+                written
+            );
 
             // Device accepted data - try interleaving control transfers
             let mut bytes_sent = written;
@@ -720,7 +809,14 @@ fn try_primed_device_exploit(
                 if alternate {
                     // Send control transfer
                     let mut overflow_buffer = vec![0u8; 0xFFFF];
-                    let _ = handle.read_control(0x82, 0x00, 0x0000, bulk_out_ep as u16, &mut overflow_buffer, std::time::Duration::from_millis(50));
+                    let _ = handle.read_control(
+                        0x82,
+                        0x00,
+                        0x0000,
+                        bulk_out_ep as u16,
+                        &mut overflow_buffer,
+                        std::time::Duration::from_millis(50),
+                    );
                 }
 
                 alternate = !alternate;
@@ -729,7 +825,7 @@ fn try_primed_device_exploit(
                     Ok(written) => {
                         bytes_sent += written;
                         println!("  ✓ Sent {} bytes, total: {} bytes", written, bytes_sent);
-                    },
+                    }
                     Err(e) => {
                         if e.to_string().contains("timeout") {
                             // Check if device crashed
@@ -745,18 +841,32 @@ fn try_primed_device_exploit(
             }
 
             Err("Completed all data transfer without triggering exploit".to_string())
-        },
+        }
         Err(e) => {
             if e.to_string().contains("timeout") {
                 // Device timed out immediately - try control transfer
                 let mut overflow_buffer = vec![0u8; 0xFFFF];
-                let _ = handle.read_control(0x82, 0x00, 0x0000, bulk_out_ep as u16, &mut overflow_buffer, std::time::Duration::from_millis(100));
+                let _ = handle.read_control(
+                    0x82,
+                    0x00,
+                    0x0000,
+                    bulk_out_ep as u16,
+                    &mut overflow_buffer,
+                    std::time::Duration::from_millis(100),
+                );
 
                 // Check responsiveness
                 std::thread::sleep(std::time::Duration::from_millis(50));
-                match handle.write_bulk(bulk_out_ep, &payload_data[0..0x100], std::time::Duration::from_millis(50)) {
+                match handle.write_bulk(
+                    bulk_out_ep,
+                    &payload_data[0..0x100],
+                    std::time::Duration::from_millis(50),
+                ) {
                     Ok(_) => Err("Device still responsive after primed timeout".to_string()),
-                    Err(_) => Ok("✓ Primed device exploit succeeded! Device became unresponsive.".to_string()),
+                    Err(_) => Ok(
+                        "✓ Primed device exploit succeeded! Device became unresponsive."
+                            .to_string(),
+                    ),
                 }
             } else {
                 Err(format!("Bulk transfer failed: {}", e))
@@ -768,7 +878,7 @@ fn try_primed_device_exploit(
 fn try_aggressive_timing_exploit(
     handle: &rusb::DeviceHandle<rusb::GlobalContext>,
     bulk_out_ep: u8,
-    payload_data: &[u8]
+    payload_data: &[u8],
 ) -> Result<String, String> {
     println!("  Attempting aggressive timing method...");
 
@@ -781,21 +891,32 @@ fn try_aggressive_timing_exploit(
 
         // Send control transfer, then immediately try bulk transfer
         let _ = handle.read_control(
-            0x82, 0x00, 0x0000, bulk_out_ep as u16, &mut overflow_buffer,
-            std::time::Duration::from_millis(10)
+            0x82,
+            0x00,
+            0x0000,
+            bulk_out_ep as u16,
+            &mut overflow_buffer,
+            std::time::Duration::from_millis(10),
         );
 
         match handle.write_bulk(bulk_out_ep, chunk, std::time::Duration::from_millis(10)) {
             Ok(written) => {
                 println!("  ✓ Aggressive chunk sent ({} bytes)", written);
-            },
+            }
             Err(e) => {
                 if e.to_string().contains("timeout") {
                     // Check if device crashed
                     std::thread::sleep(std::time::Duration::from_micros(500));
-                    match handle.write_bulk(bulk_out_ep, &payload_data[0..0x100], std::time::Duration::from_micros(500)) {
+                    match handle.write_bulk(
+                        bulk_out_ep,
+                        &payload_data[0..0x100],
+                        std::time::Duration::from_micros(500),
+                    ) {
                         Ok(_) => continue, // Device still responsive, keep trying
-                        Err(_) => return Ok("✓ Aggressive timing exploit succeeded! Device became unresponsive.".to_string()),
+                        Err(_) => return Ok(
+                            "✓ Aggressive timing exploit succeeded! Device became unresponsive."
+                                .to_string(),
+                        ),
                     }
                 }
                 return Err(format!("Aggressive transfer failed: {}", e));
@@ -811,7 +932,7 @@ fn try_aggressive_timing_exploit(
 fn try_device_reset_exploit(
     handle: &rusb::DeviceHandle<rusb::GlobalContext>,
     bulk_out_ep: u8,
-    payload_data: &[u8]
+    payload_data: &[u8],
 ) -> Result<String, String> {
     println!("  Attempting device reset method...");
 
@@ -835,31 +956,57 @@ fn try_device_reset_exploit(
     };
 
     // Send minimal data with very short timeout
-    match handle.write_bulk(bulk_out_ep, minimal_chunk, std::time::Duration::from_millis(10)) {
+    match handle.write_bulk(
+        bulk_out_ep,
+        minimal_chunk,
+        std::time::Duration::from_millis(10),
+    ) {
         Ok(_) => {
             println!("  ✓ Minimal bulk transfer succeeded after reset - device is responsive");
             // If it succeeds, try overflow immediately
             let mut overflow_buffer = vec![0u8; 0xFFFF];
-            let _ = handle.read_control(0x82, 0x00, 0x0000, bulk_out_ep as u16, &mut overflow_buffer, std::time::Duration::from_millis(50));
+            let _ = handle.read_control(
+                0x82,
+                0x00,
+                0x0000,
+                bulk_out_ep as u16,
+                &mut overflow_buffer,
+                std::time::Duration::from_millis(50),
+            );
 
             // Check if device crashed
             std::thread::sleep(std::time::Duration::from_millis(20));
-            match handle.write_bulk(bulk_out_ep, &payload_data[0..0x100], std::time::Duration::from_millis(20)) {
+            match handle.write_bulk(
+                bulk_out_ep,
+                &payload_data[0..0x100],
+                std::time::Duration::from_millis(20),
+            ) {
                 Ok(_) => Err("Device still responsive after reset + overflow attempt".to_string()),
                 Err(_) => Ok("✓ Device reset + minimal payload exploit succeeded!".to_string()),
             }
-        },
+        }
         Err(e) => {
             if e.to_string().contains("timeout") {
                 println!("  ✓ Minimal bulk transfer timed out after reset - trying overflow");
 
                 // Send overflow control transfer
                 let mut overflow_buffer = vec![0u8; 0xFFFF];
-                let _ = handle.read_control(0x82, 0x00, 0x0000, bulk_out_ep as u16, &mut overflow_buffer, std::time::Duration::from_millis(100));
+                let _ = handle.read_control(
+                    0x82,
+                    0x00,
+                    0x0000,
+                    bulk_out_ep as u16,
+                    &mut overflow_buffer,
+                    std::time::Duration::from_millis(100),
+                );
 
                 // Check if device is still responsive
                 std::thread::sleep(std::time::Duration::from_millis(50));
-                match handle.write_bulk(bulk_out_ep, &payload_data[0..0x100], std::time::Duration::from_millis(50)) {
+                match handle.write_bulk(
+                    bulk_out_ep,
+                    &payload_data[0..0x100],
+                    std::time::Duration::from_millis(50),
+                ) {
                     Ok(_) => Err("Device still responsive after reset timeout".to_string()),
                     Err(_) => Ok("✓ Device reset + timeout exploit succeeded!".to_string()),
                 }
@@ -888,13 +1035,19 @@ async fn list_usb_devices() -> Result<Vec<DeviceInfo>, String> {
                             continue;
                         }
 
-                        let manufacturer = device.open().ok()
+                        let manufacturer = device
+                            .open()
+                            .ok()
                             .and_then(|h| h.read_manufacturer_string_ascii(&desc).ok());
 
-                        let product = device.open().ok()
+                        let product = device
+                            .open()
+                            .ok()
                             .and_then(|h| h.read_product_string_ascii(&desc).ok());
 
-                        let serial_number = device.open().ok()
+                        let serial_number = device
+                            .open()
+                            .ok()
                             .and_then(|h| h.read_serial_number_string_ascii(&desc).ok());
 
                         device_list.push(DeviceInfo {
