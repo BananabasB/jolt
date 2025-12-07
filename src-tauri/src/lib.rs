@@ -1,8 +1,8 @@
 use reqwest::blocking;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use tokio;
 use tauri::Manager;
+use tokio;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 
@@ -308,11 +308,9 @@ impl RCMHax {
 
 /// Payload construction utilities
 fn build_payload(target_payload: &[u8], intermezzo_path: &Path) -> Result<Vec<u8>, String> {
-    // Read our intermezzo relocator...
-    let intermezzo_path = intermezzo_path.to_str().ok_or("Invalid intermezzo path")?;
-
-    if !Path::new(intermezzo_path).exists() {
-        return Err("Could not find the intermezzo interposer. Did you build it?".to_string());
+    // Just use the path that was passed in
+    if !intermezzo_path.exists() {
+        return Err(format!("Could not find the intermezzo interposer at {:?}. Did you build it?", intermezzo_path));
     }
 
     let intermezzo =
@@ -565,7 +563,10 @@ fn open_url(url: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn inject_payload(payload_path: String, app_handle: tauri::AppHandle) -> Result<String, String> {
+async fn inject_payload(
+    payload_path: String,
+    app_handle: tauri::AppHandle,
+) -> Result<String, String> {
     println!("Starting Fusée Gelée exploit (Rust implementation based on Python original)...");
     println!("Payload path: {}", payload_path);
 
@@ -577,15 +578,17 @@ async fn inject_payload(payload_path: String, app_handle: tauri::AppHandle) -> R
     // Use Tauri v2 API to resolve resource path
     let resource_path = app_handle
         .path()
-        .resolve("assets/intermezzo.bin", tauri::path::BaseDirectory::Resource)
+        .resolve(
+            "assets/intermezzo.bin",
+            tauri::path::BaseDirectory::Resource,
+        )
         .map_err(|e| format!("Could not resolve intermezzo.bin path: {}", e))?;
-    
+
     if !resource_path.exists() {
         return Err(format!("Intermezzo binary not found at: {:?}. Please ensure you have built the intermezzo relocator.", resource_path));
     }
 
-    let intermezzo_path_str = resource_path.to_str()
-        .ok_or("Invalid intermezzo path")?;
+    let intermezzo_path_str = resource_path.to_str().ok_or("Invalid intermezzo path")?;
 
     // Execute the exploit using our faithful Rust implementation
     match execute_fusee_gelee_exploit(&payload_path, intermezzo_path_str) {
@@ -1120,7 +1123,7 @@ pub fn run() {
             inject_payload,
             download_payload,
             open_url,
-            get_app_version 
+            get_app_version
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
