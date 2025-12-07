@@ -1,3 +1,4 @@
+> **For Mac users**: Please run `xattr -cr /Applications/jolt.app` after installing. This ensures that jolt will be able to run. I am not paying £99 every year to avoid this.
 # jolt
 Easy to use, modern looking Switch RCM app.
 
