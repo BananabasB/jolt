@@ -560,6 +560,11 @@ fn get_app_version() -> String {
 }
 
 #[tauri::command]
+fn open_url(url: String) -> Result<(), String> {
+    open::that(url).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn inject_payload(payload_path: String, app_handle: tauri::AppHandle) -> Result<String, String> {
     println!("Starting Fusée Gelée exploit (Rust implementation based on Python original)...");
     println!("Payload path: {}", payload_path);
@@ -1114,7 +1119,7 @@ pub fn run() {
             list_usb_devices,
             inject_payload,
             download_payload,
-            // >> new command added here! <<
+            open_url,
             get_app_version 
         ])
         .run(tauri::generate_context!())

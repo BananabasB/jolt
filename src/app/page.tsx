@@ -2,14 +2,21 @@
 
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { open } from "@tauri-apps/plugin-dialog";
+import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { shell } from "@tauri-apps/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModeToggle } from "@/components/ui/mode-toggle";
-import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch, CircleX } from "lucide-react";
+import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch, CircleX, ArrowBigLeft, Undo2, Globe, Lock, Unlock } from "lucide-react";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { FetchPayloads } from "@/components/fetch-payloads";
-import Link from "next/link";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupButton,
+  InputGroupInput,
+} from "@/components/ui/input-group"
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 
 interface DeviceInfo {
   vendor_id: number;
@@ -35,6 +42,10 @@ export default function Home() {
   const [isInjecting, setIsInjecting] = useState(false);
   const [version, setVersion] = useState<string>("");
 
+  // State for external links history and current index
+  const [externalHistory, setExternalHistory] = useState<string[]>([]);
+  const [currentExternalIndex, setCurrentExternalIndex] = useState<number>(-1);
+
   useEffect(() => {
     const fetchVersion = async () => {
       try {
@@ -48,6 +59,26 @@ export default function Home() {
 
     fetchVersion();
   }, []);
+
+  // Wrap Link component to track external link clicks
+  const ExternalLink: React.FC<{ href: string; children: React.ReactNode }> = ({ href, children }) => {
+    const handleClick = (e: React.MouseEvent) => {
+      // Only track if href is external (starts with http or https)
+      if (/^https?:\/\//.test(href)) {
+        e.preventDefault();
+        let newHistory = externalHistory.slice(0, currentExternalIndex + 1);
+        newHistory.push(href);
+        setExternalHistory(newHistory);
+        setCurrentExternalIndex(newHistory.length - 1);
+        window.open(href, "_blank", "noopener,noreferrer");
+      }
+    };
+    return (
+      <a href={href} onClick={handleClick} target="_blank" rel="noopener noreferrer" className="underline">
+        {children}
+      </a>
+    );
+  };
 
   const scanForDevice = async () => {
     try {
@@ -110,6 +141,39 @@ export default function Home() {
     }, 2000);
     return () => clearInterval(interval);
   }, [isInjecting, showDevices]);
+
+  const goBackExternal = () => {
+    // Close the mini-browser and return to main app view
+    setCurrentExternalIndex(-1);
+  };
+
+  const openInBrowser = async () => {
+    if (currentExternalIndex >= 0 && externalHistory[currentExternalIndex]) {
+      try {
+        await invoke("open_url", { url: externalHistory[currentExternalIndex] });
+      } catch (error) {
+        console.error("Failed to open in system browser:", error);
+      }
+    }
+  };
+
+  // Helper to parse URL into protocol, domain, and path
+  const parseUrl = (url: string) => {
+    try {
+      const u = new URL(url);
+      return {
+        protocol: u.protocol,
+        domain: u.host,
+        path: u.pathname + u.search + u.hash,
+      };
+    } catch {
+      return {
+        protocol: "",
+        domain: url,
+        path: "",
+      };
+    }
+  };
 
   return (
     <main className="flex min-h-screen bg-background items-center justify-center relative p-4">
@@ -174,7 +238,7 @@ export default function Home() {
                         <>
                           <span>Switch detected but not in RCM mode</span>
                           <span className="text-sm text-muted-foreground">
-                            Please reboot your Nintendo Switch into RCM mode. <Link href="https://switch.hacks.guide/user_guide/rcm/entering_rcm.html">Show me how</Link>
+                            Please reboot your Nintendo Switch into RCM mode. <ExternalLink href="https://switch.hacks.guide/user_guide/rcm/entering_rcm.html">Show me how</ExternalLink>
                           </span>
                         </>
                       )
@@ -239,7 +303,7 @@ export default function Home() {
                 variant="outline"
                 onClick={async () => {
                   try {
-                    const filePath = await open({
+                    const filePath = await openDialog({
                       multiple: false,
                       filters: [{
                         name: "Payload files",
@@ -276,6 +340,100 @@ export default function Home() {
           </div>
         </div>
       </div>
+
+      {/* External link mini-bar with iframe */}
+      {currentExternalIndex >= 0 && (
+        
+        <div className="fixed inset-0 z-50">
+          <iframe
+            src={externalHistory[currentExternalIndex]}
+            title="External Content"
+            className="w-full h-full border-none"
+            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
+          />
+          <div className="z-50 transition bg-transparent absolute [--radius:9999px] bottom-2 left-1/2 transform -translate-x-1/2 flex min-w-[200px] max-w-2xl overflow-hidden items-end h-30 pb-2 px-2 gap-2">
+            <InputGroup className="aspect-square bg-card! h-10 flex-none w-10">
+              <InputGroupButton size={"icon-sm"} onClick={goBackExternal} className="cursor-pointer select-none rounded-full w-10 h-10 flex items-center justify-center pb-0">
+                <Undo2 />
+              </InputGroupButton>
+            </InputGroup>
+            <InputGroup className="grow bg-card! flex h-10 items-center gap-2 relative overflow-hidden">
+              <InputGroupAddon>
+                {(() => {
+                  const { protocol } = parseUrl(externalHistory[currentExternalIndex]);
+                  if (protocol === "https:") {
+                    // shadcn/ui Popover for secure connection
+                    return (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <InputGroupButton
+                            size="icon-xs"
+                            className="cursor-pointer rounded-full transition"
+                            aria-label="Secure Connection"
+                          >
+                            <Lock className="w-4 h-4" />
+                          </InputGroupButton>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="start"
+                          className="flex flex-col gap-1 rounded-xl text-sm min-w-[180px] border-green-500/60 bg-card shadow-lg"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Lock className="w-4 h-4 text-green-500" />
+                            <span className="font-semibold text-green-700 dark:text-green-300">Secure connection</span>
+                          </div>
+                          <span className="text-muted-foreground">Your connection is encrypted and secure.</span>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  } else {
+                    // shadcn/ui Popover for unsecure connection
+                    return (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <InputGroupButton
+                            size="icon-xs"
+                            className="cursor-pointer rounded-full border transition"
+                            aria-label="Unsecure Connection"
+                          >
+                            <Unlock className="w-4 h-4" />
+                          </InputGroupButton>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="start"
+                          className="flex flex-col gap-1 rounded-xl text-sm min-w-[180px] border-red-500/60 bg-card shadow-lg"
+                        >
+                          <div className="flex items-center gap-2 mb-1">
+                            <Unlock className="w-4 h-4 text-red-500" />
+                            <span className="font-semibold text-red-700 dark:text-red-300">Unsecure connection</span>
+                          </div>
+                          <span className="text-muted-foreground">Your connection is not encrypted. Be cautious.</span>
+                        </PopoverContent>
+                      </Popover>
+                    );
+                  }
+                })()}
+              </InputGroupAddon>
+              <InputGroupInput
+                readOnly
+                className="max-w-full text-center"
+                value={(() => {
+                  const { domain } = parseUrl(externalHistory[currentExternalIndex]);
+                  return domain;
+                })()}
+                aria-label="Current URL"
+              />
+              <InputGroupAddon align="inline-end">
+              <InputGroupButton onClick={openInBrowser} size="icon-xs" className="flex-none">
+                <Globe />
+              </InputGroupButton>
+            </InputGroupAddon>
+            </InputGroup>
+            
+          </div>
+        </div>
+      )}
+
       <div className="absolute text-muted-foreground text-sm bottom-3 right-3">v{version}</div>
     </main>
   );
