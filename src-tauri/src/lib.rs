@@ -473,6 +473,7 @@ pub struct RcmStatus {
     pub device_connected: bool,
     pub device_info: Option<DeviceInfo>,
     pub rcm_detected: bool,
+    pub switch_connected_not_rcm: bool,
 }
 
 // Nintendo Switch RCM constants
@@ -503,10 +504,32 @@ async fn detect_rcm_device() -> Result<RcmStatus, String> {
                                 device_connected: true,
                                 device_info,
                                 rcm_detected: true,
+                                switch_connected_not_rcm: false,
                             });
                         }
                     }
                     Err(_) => continue,
+                }
+            }
+            // Check for a Nintendo Switch that is NOT in RCM
+            for device in devices.iter().take(20) {
+                if let Ok(desc) = device.device_descriptor() {
+                    if desc.vendor_id() == 0x057E {
+                        let device_info = device.open().ok().map(|handle| DeviceInfo {
+                            vendor_id: desc.vendor_id(),
+                            product_id: desc.product_id(),
+                            manufacturer: handle.read_manufacturer_string_ascii(&desc).ok(),
+                            product: handle.read_product_string_ascii(&desc).ok(),
+                            serial_number: handle.read_serial_number_string_ascii(&desc).ok(),
+                        });
+
+                        return Ok(RcmStatus {
+                            device_connected: true,
+                            device_info,
+                            rcm_detected: false,
+                            switch_connected_not_rcm: true,
+                        });
+                    }
                 }
             }
             // No RCM device found
@@ -514,6 +537,7 @@ async fn detect_rcm_device() -> Result<RcmStatus, String> {
                 device_connected: false,
                 device_info: None,
                 rcm_detected: false,
+                switch_connected_not_rcm: false,
             })
         }
         Err(e) => Err(format!("Failed to enumerate USB devices: {}", e)),

@@ -6,9 +6,10 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModeToggle } from "@/components/ui/mode-toggle";
-import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch } from "lucide-react";
+import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch, CircleX } from "lucide-react";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { FetchPayloads } from "@/components/fetch-payloads";
+import Link from "next/link";
 
 interface DeviceInfo {
   vendor_id: number;
@@ -22,6 +23,7 @@ interface RcmStatus {
   device_connected: boolean;
   device_info?: DeviceInfo;
   rcm_detected: boolean;
+  switch_connected_not_rcm: boolean;
 }
 
 export default function Home() {
@@ -159,14 +161,25 @@ export default function Home() {
             <div className="flex items-center gap-2">
               {rcmStatus?.rcm_detected ? (
                 <CheckCircle size={20} className="text-green-500" />
+              ) : rcmStatus?.switch_connected_not_rcm ? (
+                <AlertCircle size={20} className="text-orange-500" />
               ) : (
-                <AlertCircle size={20} className="text-red-500" />
+                <CircleX size={20} className="text-red-500" />
               )}
-              <span>
+              <div className="flex flex-col gap-1">
                 {rcmStatus?.rcm_detected
                   ? "Switch in RCM mode detected"
-                  : "no Switch in RCM mode found"}
-              </span>
+                  : rcmStatus?.switch_connected_not_rcm
+                    ? (
+                        <>
+                          <span>Switch detected but not in RCM mode</span>
+                          <span className="text-sm text-muted-foreground">
+                            Please reboot your Nintendo Switch into RCM mode. <Link href="https://switch.hacks.guide/user_guide/rcm/entering_rcm.html">Show me how</Link>
+                          </span>
+                        </>
+                      )
+                    : "no Switch found"}
+              </div>
             </div>
 
             {rcmStatus?.device_info && (
