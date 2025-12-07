@@ -3,11 +3,10 @@
 import { useState, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { shell } from "@tauri-apps/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModeToggle } from "@/components/ui/mode-toggle";
-import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch, CircleX, ArrowBigLeft, Undo2, Globe, Lock, Unlock } from "lucide-react";
+import { Zap, Usb, AlertCircle, CheckCircle, Loader2, Syringe, LoaderPinwheel, FolderSearch, CircleX, Undo2, Globe, Lock, Unlock } from "lucide-react";
 import { ButtonGroup } from "@/components/ui/button-group";
 import { FetchPayloads } from "@/components/fetch-payloads";
 import {
